@@ -492,6 +492,12 @@ static ULONG ElfLoad(void* addr) {
 	return EntryPoint;
 }
 
+static inline void out_8(volatile unsigned char *addr, int val)
+{
+	__asm__ __volatile__("stb%U0%X0 %1,%0; sync"
+			     : "=m" (*addr) : "r" (val));
+}
+
 static int FbSetDepthControl(OFHANDLE Control) {
 	ULONG AssignedAddress[2 * 5];
 	ULONG AddrLength = sizeof(AssignedAddress);
@@ -556,6 +562,14 @@ static int FbSetDepthControl(OFHANDLE Control) {
 		StdOutWrite("Failed to set mode: ");
 		print_error(err);
 		return false;
+	}
+
+	// Set up color palette to be 0-255 (?)
+	for (int i = 0; i < 256; i++) {
+		out_8(&info.cmap_regs->addr, i);	/* tell clut what addr to fill	*/
+		out_8(&info.cmap_regs->lut, i);		/* send one color channel at	*/
+		out_8(&info.cmap_regs->lut, i);		/* a time...			*/
+		out_8(&info.cmap_regs->lut, i);
 	}
 
 	// debug: dump registers to a place in memory that isn't nuked on reset
