@@ -23,7 +23,7 @@ endif
 ifeq ($(PLATFORM),ppc)
   CC	  = $(DEVKITPPC)/bin/powerpc-eabi-gcc
   AR      = $(DEVKITPPC)/bin/powerpc-eabi-gcc-ar
-  CFLAGS += -mcpu=604 -m32 -mhard-float -mno-eabi -mno-sdata -mbig
+  CFLAGS += -mcpu=604 -m32 -mhard-float -mno-eabi -mno-sdata -mlittle
 endif
 
 # With this, the makefile should work on Windows also.
