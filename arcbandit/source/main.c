@@ -22,6 +22,7 @@
 #include "pxi.h"
 
 ULONG s_MacIoStart;
+PVOID s_RamDiskAddr;
 
 void ArcFwSetup(void);
 
@@ -765,6 +766,7 @@ void ARC_NORETURN FwMain(PHW_DESCRIPTION Desc) {
 	s_RuntimePointers[RUNTIME_HAS_CUDA].v = (Desc->MrpFlags & MRP_VIA_IS_CUDA) != 0;
 
 	s_MacIoStart = Desc->GrandCentralStart;
+	s_RamDiskAddr = Desc->RamDiskAddr ? Desc->RamDiskAddr | 0x80000000 : NULL;
 	ArcMain();
 	// should never reach here
 	while (1) {}

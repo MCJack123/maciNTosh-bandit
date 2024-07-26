@@ -564,7 +564,7 @@ static int FbSetDepthControl(OFHANDLE Control) {
 		return false;
 	}
 
-	// Set up color palette to be 0-255 (?)
+	// Set up color palette to be 0-255 (gamma?)
 	for (int i = 0; i < 256; i++) {
 		out_8(&info.cmap_regs->addr, i);	/* tell clut what addr to fill	*/
 		out_8(&info.cmap_regs->lut, i);		/* send one color channel at	*/
@@ -775,6 +775,41 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 	PHW_DESCRIPTION Desc = (PHW_DESCRIPTION) Addr;
 	Desc->MemoryLength = s_PhysMemLength;
 	Desc->GrandCentralStart = s_GrandCentralStart;
+
+	// load driver ramdisk from disk
+	strcpy(&BootPath[BootPathIdx], "drivers.img");
+	File = OfOpen(BootPath);
+	if (File == OFINULL) {
+		StdOutWrite("Could not open ramdisk: ");
+		StdOutWrite(BootPath);
+		StdOutWrite("\r\n");
+		Desc->RamDiskAddr = NULL;
+	} else {
+		// load at exactly 5MB
+		// use the NT mapping because the 1:1 mapping may not be present, whereas the NT mapping is guaranteed to be present
+		Addr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x500000);
+		ULONG ActualLoad = 0;
+		// allow loading up to 1.5MB
+		ULONG LastAddress = 0x680000;
+		if (s_LastFreePage < (LastAddress / PAGE_SIZE)) LastAddress = s_LastFreePage * PAGE_SIZE;
+		StdOutWrite("Reading drivers.img...\r\n");
+		Status = OfRead(File, Addr, LastAddress - (ULONG)Addr - (s_FirstFreePage * PAGE_SIZE), &ActualLoad);
+		OfClose(File);
+
+		if (ARC_FAIL(Status)) {
+			StdOutWrite("Could not read ramdisk: ");
+			StdOutWrite(BootPath);
+			StdOutWrite("\r\n");
+			Desc->RamDiskAddr = NULL;
+		}
+
+		// munge to LE
+		Desc->RamDiskAddr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x180000);
+		MsrLeSwap64(Desc->RamDiskAddr, Addr, ActualLoad, 1474560);
+
+		// zero image out of memory
+		memset(Addr, 0, ActualLoad);
+	}
 	
 	StdOutWrite("-> reading decrementer freq\r\n");
 	{
@@ -797,7 +832,7 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 		Desc->DecrementerFrequency = DecrementerFrequency;
 	}
 	
-	s_MrpFlags = MRP_VIA_IS_CUDA;
+	s_MrpFlags = MRP_VIA_IS_CUDA | MRP_BANDIT;
 	Desc->MrpFlags = s_MrpFlags;
 	
 	StdOutWrite("-> initializing framebuffer\r\n");

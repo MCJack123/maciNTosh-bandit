@@ -281,6 +281,8 @@ static ULONG g_AdditionalComponentsCount = 0;
 static ULONG g_ConfigurationDataOffset = 0;
 _Static_assert(sizeof(DEVICE_ENTRY) < 0x100);
 
+extern PVOID s_RamDiskAddr;
+
 // Config functions implementation.
 
 static bool DeviceEntryIsValidImpl(PCONFIGURATION_COMPONENT Component, PULONG Index) {
@@ -757,56 +759,62 @@ ARC_STATUS ArcDiskInitRamdisk(void) {
 
     PVOID Ramdisk = NULL;
     ULONG FileSize32 = 0;
-
-    ULONG CountCdrom;
-    ArcDiskGetCounts(NULL, &CountCdrom);
-
-    // Walk through all CDROMs
     ARC_STATUS Status = _EFAULT;
-    for (ULONG i = 0; i < CountCdrom; i++) {
-        char CdVar[6];
-        char Path[1024];
-        snprintf(CdVar, sizeof(CdVar), "cd%02d:", i);
-        PCHAR DevicePath = ArcEnvGetDevice(CdVar);
-        snprintf(Path, sizeof(Path), "%s\\drivers.img", DevicePath);
 
-        // Open file
-        U32LE FileId;
-        Status = Api->OpenRoutine(Path, ArcOpenReadOnly, &FileId);
-        if (ARC_FAIL(Status)) continue;
+    // Try already loaded disk if it exists
+    if (s_RamDiskAddr != NULL) {
+        Ramdisk = s_RamDiskAddr;
+        FileSize32 = 1474560; // size of a 1.44 MFM disk
+    } else {
+        ULONG CountCdrom;
+        ArcDiskGetCounts(NULL, &CountCdrom);
 
-        do {
-            // Get the actual file size.
-            FILE_INFORMATION Info;
-            Status = Api->GetFileInformationRoutine(FileId.v, &Info);
-            if (ARC_FAIL(Status)) break;
+        // Walk through all CDROMs
+        for (ULONG i = 0; i < CountCdrom; i++) {
+            char CdVar[6];
+            char Path[1024];
+            snprintf(CdVar, sizeof(CdVar), "cd%02d:", i);
+            PCHAR DevicePath = ArcEnvGetDevice(CdVar);
+            snprintf(Path, sizeof(Path), "%s\\drivers.img", DevicePath);
 
-            // if over 4MB don't bother
-            if (Info.EndingAddress.QuadPart > 0x400000) break;
+            // Open file
+            U32LE FileId;
+            Status = Api->OpenRoutine(Path, ArcOpenReadOnly, &FileId);
+            if (ARC_FAIL(Status)) continue;
 
-            FileSize32 = Info.EndingAddress.LowPart;
+            do {
+                // Get the actual file size.
+                FILE_INFORMATION Info;
+                Status = Api->GetFileInformationRoutine(FileId.v, &Info);
+                if (ARC_FAIL(Status)) break;
 
-            // Allocate some RAM
-            Ramdisk = ArcMemAllocDirect(FileSize32);
-            if (Ramdisk == NULL) break;
+                // if over 4MB don't bother
+                if (Info.EndingAddress.QuadPart > 0x400000) break;
 
-            // Read image into RAM.
-            U32LE Count;
-            Status = Api->ReadRoutine(FileId.v, Ramdisk, FileSize32, &Count);
-            if (ARC_FAIL(Status)) {
-                FileSize32 = 0;
-                break;
-            }
-            if (Count.v != FileSize32) {
-                FileSize32 = 0;
-                Status = _EIO;
-                break;
-            }
+                FileSize32 = Info.EndingAddress.LowPart;
+
+                // Allocate some RAM
+                Ramdisk = ArcMemAllocDirect(FileSize32);
+                if (Ramdisk == NULL) break;
+
+                // Read image into RAM.
+                U32LE Count;
+                Status = Api->ReadRoutine(FileId.v, Ramdisk, FileSize32, &Count);
+                if (ARC_FAIL(Status)) {
+                    FileSize32 = 0;
+                    break;
+                }
+                if (Count.v != FileSize32) {
+                    FileSize32 = 0;
+                    Status = _EIO;
+                    break;
+                }
 
 
-        } while (false);
-        Api->CloseRoutine(FileId.v);
-        break;
+            } while (false);
+            Api->CloseRoutine(FileId.v);
+            break;
+        }
     }
 
     if (Ramdisk == NULL || FileSize32 == 0) return Status;

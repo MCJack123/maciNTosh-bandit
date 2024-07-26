@@ -3,6 +3,7 @@
 enum { // MRP = "MacRISC Paddington"
 	MRP_IN_EMULATOR = ARC_BIT(0),
 	MRP_VIA_IS_CUDA = ARC_BIT(1),
+	MRP_BANDIT = ARC_BIT(2),
 };
 
 typedef struct _HW_DESCRIPTION {
@@ -21,5 +22,5 @@ typedef struct _HW_DESCRIPTION {
 	
 	// Boot device details.
 	ULONG BootDevice;
-	ULONG Padding;
+	ULONG RamDiskAddr; // Address of driver ramdisk if provided by loader
 } HW_DESCRIPTION, *PHW_DESCRIPTION;
