@@ -1,16 +1,32 @@
 # Windows NT for Power Macintosh
 
-This repository currently contains the source code for the ARC firmware and its loader, targeting New World Power Macintosh systems using the *Gossamer* architecture (that is, MPC106 "Grackle" memory controller and PCI host, and "Heathrow" or "Paddington" super-I/O chip on the PCI bus). That is, the following systems:
+This repository currently contains the source code for the ARC firmware and its loader, targeting:
+- New World Power Macintosh systems using the *Gossamer* architecture (that is, MPC106 "Grackle" memory controller and PCI host, and "Heathrow" or "Paddington" super-I/O chip on the PCI bus)
+- Old World Power Macintosh systems using the *TNT* architecture (that is, "Hammerhead" memory controller, "Bandit" PCI host, and "Grand Central" super-I/O chip on the PCI bus)
 
-* iMac G3 (tray-loading)
-* Power Macintosh G3 (Blue & White) *"Yosemite"*
-* Macintosh PowerBook G3 Bronze Keyboard *"Lombard"* 
-* Power Macintosh G4 PCI *"Yikes!"*
+That is, the following systems:
+
+* Gossamer:
+	* iMac G3 (tray-loading)
+	* Power Macintosh G3 (Blue & White) *"Yosemite"*
+	* Macintosh PowerBook G3 Bronze Keyboard *"Lombard"* 
+	* Power Macintosh G4 PCI *"Yikes!"*
+* TNT/Bandit:
+	* Power Macintosh 7500 *"TNT"*
+	* Power Macintosh 7600 *"Montana 7600"*
+	* Power Macintosh 7300 *"Montana"*
+	* Power Macintosh 8500 *"Nitro"*
+	* Power Macintosh 8600 *"Kansas"*
 
 The ARC firmware itself runs at a low enough level that it should be compatible with Old World systems using the same chipset too, but there is currently no loader for these systems; these are the following:
 
 * Power Macintosh G3 (beige)
 * Macintosh PowerBook G3 Series *"Wallstreet"*, *"PDQ"*
+
+These TNT-class machines have the same chipset as the others, but lack the on-board "Control" chip for video (opting for PCI-based ATI cards instead) and as such lack proper graphics support:
+
+* Power Macintosh 9500
+* Power Macintosh 9600
 
 There may be issues on your hardware.
 
@@ -20,8 +36,9 @@ NT HAL and drivers have no source present for now.
 
 * Cuda and PMU
 	* ADB keyboard
-* Flat 32bpp video framebuffer, set up by the loader. Currently the loader only supports ATI hardware (there may be issues with any ATI hardware with fcode version prior to 1.69, only the ATI Rage Pro LT (as present in Lombard) has been tested)
+* Flat 32bpp video framebuffer, set up by the loader. Currently the loader only supports ATI hardware on Grackle or Control hardware on Bandit (there may be issues with any ATI hardware with fcode version prior to 1.69, only the ATI Rage Pro LT (as present in Lombard) has been tested)
 * Mac I/O internal IDE controllers, forked from OpenBIOS (**there are no drivers for PCI IDE controllers!**)
+* MESH internal SCSI controller (**there are no drivers for PCI SCSI controllers!**)
 * USB OHCI forked from OpenBIOS (**broken, nonworking, and initialisation code commented out**)
 
 ## Drivers currently done for NT
