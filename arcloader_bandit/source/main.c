@@ -468,9 +468,6 @@ static ULONG ElfLoad(void* addr) {
 				phdrs[i].p_filesz,
 				phdrs[i].p_memsz
 			);
-			/*memcpy((void*)(phdrs[i].p_paddr),
-				(const void*)image,
-				phdrs[i].p_filesz);*/
 			if (phdrs[i].p_memsz > phdrs[i].p_filesz)
 				memset((void*)(phdrs[i].p_paddr + phdrs[i].p_filesz), 0, phdrs[i].p_memsz - phdrs[i].p_filesz);
 			memset((void*)image, 0, phdrs[i].p_filesz);
@@ -709,29 +706,6 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 	// allow loading up to 1MB, ie, before Open Firmware memory
 	ULONG LastAddress = 0x400000;
 	if (s_LastFreePage < (LastAddress / PAGE_SIZE)) LastAddress = s_LastFreePage * PAGE_SIZE;
-#if 0
-	// OF 1.0.5 appears to throw EFAULT when reading too much of a file
-	// Do a sort of binary partitioning scheme to step through the whole file progressively
-	// TODO: determine if this was actually because it overwrote OF memory
-	PVOID WritePos = Addr;
-	ULONG ReadSize = PAGE_SIZE;
-	while (ReadSize) {
-		ULONG ActualSize = 0;
-		Status = OfRead(File, WritePos, ReadSize, &ActualSize);
-		if (Status == _EFAULT || (ARC_SUCCESS(Status) && ActualSize == 0)) {
-			StdOutWrite("read failed, shifting\r\n");
-			ReadSize >>= 1;
-		} else if (ARC_FAIL(Status)) {
-			break;
-		} else {
-			StdOutWrite("read ");
-			print_hex(ActualSize);
-			StdOutWrite(" bytes\r\n");
-			WritePos += ActualSize;
-			ActualLoad += ActualSize;
-		}
-	}
-#endif
 	StdOutWrite("Reading stage2.elf...\r\n");
 	Status = OfRead(File, Addr, LastAddress - (ULONG)Addr - (s_FirstFreePage * PAGE_SIZE), &ActualLoad);
 	OfClose(File);
@@ -776,9 +750,8 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 	Desc->MemoryLength = s_PhysMemLength;
 	Desc->GrandCentralStart = s_GrandCentralStart;
 
-	// load driver ramdisk from disk
-	strcpy(&BootPath[BootPathIdx], "drivers.img");
-	File = OfOpen(BootPath);
+	// load floppy disk into memory because I'm lazy
+	File = OfOpen("/bandit/gc/swim3");
 	if (File == OFINULL) {
 		StdOutWrite("Could not open ramdisk: ");
 		StdOutWrite(BootPath);
@@ -787,13 +760,13 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 	} else {
 		// load at exactly 5MB
 		// use the NT mapping because the 1:1 mapping may not be present, whereas the NT mapping is guaranteed to be present
-		Addr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x500000);
+		Addr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x180000);
 		ULONG ActualLoad = 0;
 		// allow loading up to 1.5MB
-		ULONG LastAddress = 0x680000;
+		ULONG LastAddress = 0x300000;
 		if (s_LastFreePage < (LastAddress / PAGE_SIZE)) LastAddress = s_LastFreePage * PAGE_SIZE;
-		StdOutWrite("Reading drivers.img...\r\n");
-		Status = OfRead(File, Addr, LastAddress - (ULONG)Addr - (s_FirstFreePage * PAGE_SIZE), &ActualLoad);
+		StdOutWrite("Reading floppy disk...\r\n");
+		Status = OfCallMethod(3, 1, &ActualLoad, "read-blocks", File, (ULONG)Addr, (ULONG)0, (ULONG)2880);
 		OfClose(File);
 
 		if (ARC_FAIL(Status)) {
@@ -801,14 +774,14 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 			StdOutWrite(BootPath);
 			StdOutWrite("\r\n");
 			Desc->RamDiskAddr = NULL;
+		} else {
+			// munge to LE
+			Desc->RamDiskAddr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x500000);
+			MsrLeSwap64(Desc->RamDiskAddr, Addr, ActualLoad * 512, 1474560);
+
+			// zero image out of memory
+			memset(Addr, 0, ActualLoad);
 		}
-
-		// munge to LE
-		Desc->RamDiskAddr = (PVOID)((s_FirstFreePage * PAGE_SIZE) + 0x180000);
-		MsrLeSwap64(Desc->RamDiskAddr, Addr, ActualLoad, 1474560);
-
-		// zero image out of memory
-		memset(Addr, 0, ActualLoad);
 	}
 	
 	StdOutWrite("-> reading decrementer freq\r\n");
