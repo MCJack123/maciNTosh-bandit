@@ -18,6 +18,7 @@
 #include "getstr.h"
 //#include "ppchook.h"
 #include "hwdesc.h"
+#include "timer.h"
 
 #include "pxi.h"
 
@@ -743,6 +744,13 @@ void ARC_NORETURN FwMain(PHW_DESCRIPTION Desc) {
 	printf("Init scsi...\r\n");
 	int mesh_init(uint32_t addr);
 	mesh_init((ULONG)PciPhysToVirt(Desc->GrandCentralStart + 0x18000));
+
+	// Floppy controller.
+	/*
+	printf("Init floppy...\r\n");
+	int swim3_init(uint32_t addr, uint32_t dmaaddr);
+	swim3_init((ULONG)PciPhysToVirt(Desc->GrandCentralStart + 0x15000), (ULONG)PciPhysToVirt(Desc->GrandCentralStart + 0x8100));
+	*/
 
 	printf("Early driver init done.\r\n");
 

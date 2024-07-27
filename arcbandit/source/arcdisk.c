@@ -13,6 +13,7 @@
 #include "arcio.h"
 #include "arcfs.h"
 #include "arcenv.h"
+#include "floppy_swim.h"
 #include "scsi_mesh.h"
 
 // ARC firmware support for disks:
@@ -49,10 +50,12 @@ static IDE_DEVICE_MOUNT_TABLE s_IdeTable[8] = { 0 };
 static char s_UsbControllerPath[] = "multi(0)scsi(0)";
 static char s_IdeControllerPath[] = "multi(1)multi(0)";
 static char s_ScsiControllerPath[] = "multi(1)scsi(0)";
+static char s_FloppyControllerPath[] = "multi(1)multi(2)";
 
 static char s_UsbComponentName[] = "OHCI";
 static char s_IdeComponentName[] = "MIO_IDE";
 static char s_ScsiComponentName[] = "MESH_SCSI";
+static char s_FloppyComponentName[] = "SWIM_FLOPPY";
 
 extern bool g_UsbInitialised;
 extern bool g_IdeInitialised;
@@ -163,6 +166,15 @@ static ARC_STATUS ScsiRead(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG C
 static ARC_STATUS ScsiWrite(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG CountSectors, PVOID Buffer);
 static ARC_STATUS ScsiGetReadStatus(ULONG FileId);
 static ARC_STATUS ScsiGetFileInformation(ULONG FileId, PFILE_INFORMATION FileInfo);
+
+static ARC_STATUS FloppyOpen(PCHAR OpenPath, OPEN_MODE OpenMode, PULONG FileId);
+static ARC_STATUS FloppyClose(ULONG FileId);
+static ARC_STATUS FloppyMount(PCHAR MountPath, MOUNT_OPERATION Operation);
+static ARC_STATUS FloppySeek(ULONG FileId, PLARGE_INTEGER Offset, SEEK_MODE SeekMode);
+static ARC_STATUS FloppyRead(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG CountSectors, PVOID Buffer);
+static ARC_STATUS FloppyWrite(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG CountSectors, PVOID Buffer);
+static ARC_STATUS FloppyGetReadStatus(ULONG FileId);
+static ARC_STATUS FloppyGetFileInformation(ULONG FileId, PFILE_INFORMATION FileInfo);
 
 #if 0
 // USB controller device vectors.
@@ -937,6 +949,135 @@ static ARC_STATUS ScsiGetFileInformation(ULONG FileId, PFILE_INFORMATION FileInf
 	return _ESUCCESS;
 }
 
+// Floppy device vectors.
+static const DEVICE_VECTORS FloppyVectors = {
+	.Open = FloppyOpen,
+	.Close = FloppyClose,
+	.Mount = FloppyMount,
+	.Read = DeblockerRead,
+	.Write = DeblockerWrite,
+	.Seek = DeblockerSeek,
+	.GetReadStatus = FloppyGetReadStatus,
+	.GetFileInformation = FloppyGetFileInformation,
+	.SetFileInformation = NULL,
+	.GetDirectoryEntry = NULL
+};
+
+// Floppy device functions.
+
+static ARC_STATUS FloppyGetSectorSize(ULONG FileId, PULONG SectorSize) {
+	// Get the file table entry.
+	PARC_FILE_TABLE FileEntry = ArcIoGetFile(FileId);
+	if (FileEntry == NULL) return _EFAULT;
+
+	PSWIM3_FLOPPY_DEVICE Drive = FileEntry->u.DiskContext.FloppyDrive;
+	if (Drive == NULL) return _EFAULT;
+
+	*SectorSize = Drive->BytesPerSector;
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyOpen(PCHAR OpenPath, OPEN_MODE OpenMode, PULONG FileId) {
+	// Ensure the path starts with s_FloppyControllerPath
+	if (memcmp(OpenPath, s_FloppyControllerPath, sizeof(s_FloppyControllerPath) - 1) != 0) return _ENODEV;
+	PCHAR DevicePath = &OpenPath[sizeof(s_FloppyControllerPath) - 1];
+
+	ULONG PartitionNumber = 0;
+	// Does the caller want a partition?
+	if (*DevicePath != 0) {
+		if (!ArcDeviceParse(&DevicePath, PartitionEntry, &PartitionNumber)) {
+			return _ENODEV;
+		}
+		else {
+			// partition 0 means whole disk, and is the only valid partition for floppy
+			if (PartitionNumber != 0) return _ENODEV;
+		}
+	}
+
+	// Get the file table entry.
+	PARC_FILE_TABLE FileEntry = ArcIoGetFileForOpen(*FileId);
+	if (FileEntry == NULL) return _EFAULT;
+	// Zero the disk context.
+	memset(&FileEntry->u.DiskContext, 0, sizeof(FileEntry->u.DiskContext));
+
+	// Open the floppy device.
+	PSWIM3_FLOPPY_DEVICE FloppyDrive = swim3_open_drive();
+	if (FloppyDrive == NULL) {
+		return _ENODEV;
+	}
+	FileEntry->u.DiskContext.FloppyDrive = FloppyDrive;
+	FileEntry->u.DiskContext.MaxSectorTransfer = 0xFF;
+
+	ULONG SectorSize = FloppyDrive->BytesPerSector;
+
+	// Stash the GetSectorSize ptr into the file table.
+	FileEntry->GetSectorSize = FloppyGetSectorSize;
+	FileEntry->ReadSectors = FloppyRead;
+	FileEntry->WriteSectors = FloppyWrite;
+
+	ULONG DiskSectors = FloppyDrive->NumberOfSectors;
+	ULONG PartitionSectors = DiskSectors;
+	ULONG PartitionSector = 0;
+	// Set it up for the whole disk so ArcFsPartitionObtain can work.
+	FileEntry->u.DiskContext.SectorStart = PartitionSector;
+	FileEntry->u.DiskContext.SectorCount = PartitionSectors;
+
+	FileEntry->Position = 0;
+
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyClose(ULONG FileId) {
+	PARC_FILE_TABLE FileEntry = ArcIoGetFile(FileId);
+	if (FileEntry == NULL) return _EBADF;
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyMount(PCHAR MountPath, MOUNT_OPERATION Operation) { return _EINVAL; }
+
+
+static ARC_STATUS FloppyRead(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG CountSectors, PVOID Buffer) {
+	bool Success = swim3_read_blocks(FileEntry->u.DiskContext.FloppyDrive, Buffer, StartSector, CountSectors) == CountSectors;
+	if (!Success) return _EIO;
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyWrite(PARC_FILE_TABLE FileEntry, ULONG StartSector, ULONG CountSectors, PVOID Buffer) {
+	bool Success = swim3_write_blocks(FileEntry->u.DiskContext.FloppyDrive, Buffer, StartSector, CountSectors) == CountSectors;
+	if (!Success) return _EIO;
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyGetReadStatus(ULONG FileId) {
+	PARC_FILE_TABLE FileEntry = ArcIoGetFile(FileId);
+	if (FileEntry == NULL) return _EBADF;
+	PMESH_SCSI_DEVICE Drive = FileEntry->u.DiskContext.FloppyDrive;
+	if (Drive == NULL) return _EBADF;
+	int64_t LastByte = FileEntry->u.DiskContext.SectorCount;
+	LastByte *= Drive->BytesPerSector;
+	if (FileEntry->Position >= LastByte) return _EAGAIN;
+	return _ESUCCESS;
+}
+
+static ARC_STATUS FloppyGetFileInformation(ULONG FileId, PFILE_INFORMATION FileInfo) {
+	PARC_FILE_TABLE FileEntry = ArcIoGetFile(FileId);
+	if (FileEntry == NULL) return _EBADF;
+	PMESH_SCSI_DEVICE Drive = FileEntry->u.DiskContext.FloppyDrive;
+	if (Drive == NULL) return _EBADF;
+	ULONG SectorSize = Drive->BytesPerSector;
+
+	FileInfo->CurrentPosition.QuadPart = FileEntry->Position;
+	int64_t Temp64 = FileEntry->u.DiskContext.SectorStart;
+	Temp64 *= SectorSize;
+	FileInfo->StartingAddress.QuadPart = Temp64;
+	Temp64 = FileEntry->u.DiskContext.SectorCount;
+	Temp64 *= SectorSize;
+	FileInfo->EndingAddress.QuadPart = Temp64;
+	FileInfo->Type = FloppyDiskPeripheral;
+
+	return _ESUCCESS;
+}
+
 #if 0
 static bool ArcDiskUsbInit() {
 	// Get the disk component.
@@ -989,6 +1130,24 @@ static bool ArcDiskScsiInit() {
 
 	DiskDevice->Component.Identifier = (size_t)s_ScsiComponentName;
 	DiskDevice->Component.IdentifierLength = sizeof(s_ScsiComponentName);
+	return true;
+}
+
+static bool ArcDiskFloppyInit() {
+	// Get the disk component.
+	PCONFIGURATION_COMPONENT DiskComponent = ARC_VENDOR_VECTORS()->GetComponentRoutine(s_FloppyControllerPath);
+	// Ensure that the component obtained was really the disk component.
+	if (DiskComponent->Class != AdapterClass) return false;
+	if (DiskComponent->Type != MultiFunctionAdapter) return false;
+	if (DiskComponent->Key != 2) return false;
+
+	// We really have a pointer to a device entry.
+	PDEVICE_ENTRY DiskDevice = (PDEVICE_ENTRY)DiskComponent;
+
+	DiskDevice->Vectors = &FloppyVectors;
+
+	DiskDevice->Component.Identifier = (size_t)s_FloppyComponentName;
+	DiskDevice->Component.IdentifierLength = sizeof(s_FloppyComponentName);
 	return true;
 }
 
@@ -1054,6 +1213,7 @@ ARC_STATUS ArcDiskInitRamdisk(void);
 void ArcDiskInit() {
 	//ArcDiskIdeInit();
 	ArcDiskScsiInit();
+	//ArcDiskFloppyInit();
 	//ArcDiskUsbInit();
 
 	printf("Scanning disk devices...\r\n");
@@ -1061,12 +1221,14 @@ void ArcDiskInit() {
 	char EnvKeyCd[] = "cd00:";
 	char EnvKeyHd[] = "hd00p0:";
 	char EnvKeyHdRaw[] = "hd00:";
+	char EnvKeyFd[] = "fd00:";
 	char DeviceName[64];
 
 	PVENDOR_VECTOR_TABLE Api = ARC_VENDOR_VECTORS();
 	//PDEVICE_ENTRY UsbController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_UsbControllerPath);
 	//PDEVICE_ENTRY IdeController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_IdeControllerPath);
 	PDEVICE_ENTRY ScsiController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_ScsiControllerPath);
+	PDEVICE_ENTRY FloppyController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_FloppyControllerPath);
 
 	// IDE devices first.
 	ULONG IdeIndex = 0;
@@ -1226,6 +1388,13 @@ void ArcDiskInit() {
 			printf("%s - SCSI ID %d LUN %d (partition %d)\r\n", EnvKeyHd, ScsiDev->TargetId, ScsiDev->Lun, part);
 		}
 	}
+
+	// Add the floppy device.
+	/*do {
+		if (!ArcDiskAddDeviceTwoKeys(Api, FloppyController, DiskController, FloppyDiskPeripheral, 0, 0)) break;
+		snprintf(DeviceName, sizeof(DeviceName), "%sdisk(%u)fdisk(%u)", s_FloppyControllerPath, 0, 0);
+		ArcEnvSetDevice(EnvKeyFd, DeviceName);
+	} while (false);*/
 
 #if 0
 	// Next USB mass storage devices.

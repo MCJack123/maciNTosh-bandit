@@ -172,6 +172,13 @@ static DEVICE_ENTRY Scsi = {
     .Peer = &Ide
 };
 
+// Floppy controller
+static DEVICE_ENTRY Floppy = {
+    .Component = ARC_MAKE_COMPONENT(AdapterClass, MultiFunctionAdapter, ARC_DEVICE_INPUT | ARC_DEVICE_OUTPUT, 2, 0),
+    .Parent = &MacIO,
+    .Peer = &Scsi
+};
+
 // Video
 static DEVICE_ENTRY Video = {
     .Component = ARC_MAKE_COMPONENT(ControllerClass, DisplayController, ARC_DEVICE_OUTPUT | ARC_DEVICE_CONSOLE_OUT, 0, 0),
@@ -184,7 +191,7 @@ static DEVICE_ENTRY Video = {
 static DEVICE_ENTRY Keyboard = {
     .Component = ARC_MAKE_COMPONENT(PeripheralClass, KeyboardPeripheral, ARC_DEVICE_INPUT | ARC_DEVICE_CONSOLE_IN, 0, 0),
     .Parent = &MacIO,
-    .Peer = &Scsi,
+    .Peer = &Floppy,
     .Vectors = &KeyboardVectors
 };
 
@@ -270,6 +277,7 @@ static PDEVICE_ENTRY s_DefaultComponents[] = {
     
     // MacIO
     &Keyboard,
+    &Floppy,
     &Scsi,
     &Ide,
 };

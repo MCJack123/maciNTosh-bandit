@@ -16,7 +16,7 @@ struct floppy_drive;
 typedef struct _DISK_CONTEXT {
     union {
         struct floppy_drive* FloppyDrive; // USB device mount entry
-        struct _MESH_SCSI_DEVICE* ScsiDrive; // SCSI drive entry
+        struct _SWIM3_FLOPPY_DEVICE* ScsiDrive; // SCSI drive entry
     };
     ULONG SectorStart; // Start sector of partition.
     ULONG SectorCount; // Number of sectors of partition.

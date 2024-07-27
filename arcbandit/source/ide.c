@@ -18,6 +18,7 @@
 
 #include "arc.h"
 #include "runtime.h"
+#include "timer.h"
 
 #include "ide.h"
 #include "hdreg.h"
