@@ -1228,7 +1228,7 @@ void ArcDiskInit() {
 	//PDEVICE_ENTRY UsbController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_UsbControllerPath);
 	//PDEVICE_ENTRY IdeController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_IdeControllerPath);
 	PDEVICE_ENTRY ScsiController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_ScsiControllerPath);
-	PDEVICE_ENTRY FloppyController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_FloppyControllerPath);
+	//PDEVICE_ENTRY FloppyController = (PDEVICE_ENTRY) Api->GetComponentRoutine(s_FloppyControllerPath);
 
 	// IDE devices first.
 	ULONG IdeIndex = 0;

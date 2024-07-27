@@ -191,7 +191,7 @@ static DEVICE_ENTRY Video = {
 static DEVICE_ENTRY Keyboard = {
     .Component = ARC_MAKE_COMPONENT(PeripheralClass, KeyboardPeripheral, ARC_DEVICE_INPUT | ARC_DEVICE_CONSOLE_IN, 0, 0),
     .Parent = &MacIO,
-    .Peer = &Floppy,
+    .Peer = &Scsi,
     .Vectors = &KeyboardVectors
 };
 
@@ -223,7 +223,7 @@ static DEVICE_ENTRY Pci2 = {
 static DEVICE_ENTRY Pci = {
     .Component = ARC_MAKE_COMPONENT(AdapterClass, MultiFunctionAdapter, ARC_DEVICE_NONE, 0, 0),
     .Parent = &Root,
-    .Peer = &Pci2,
+    .Peer = &MacIO,
     .Child = &Video
 };
 
@@ -270,7 +270,7 @@ static PDEVICE_ENTRY s_DefaultComponents[] = {
     // First level
     &Cpu,
     &Pci,
-    &Pci2,
+    //&Pci2,
     &MacIO,
 
     // Cpu
@@ -287,7 +287,7 @@ static PDEVICE_ENTRY s_DefaultComponents[] = {
     
     // MacIO
     &Keyboard,
-    &Floppy,
+    //&Floppy,
     &Scsi,
     &Ide,
 };

@@ -227,6 +227,8 @@ void ArcInitRamDisk(ULONG ControllerKey, PVOID Pointer, ULONG Length) {
 	s_RuntimePointers[RUNTIME_RAMDISK].v = (ULONG)&s_RuntimeRamdisk;
 }
 
+extern void ArcBugcheckInit(void);
+
 static void ArcMain() {
 	// Initialise the ARC firmware.
 	PSYSTEM_PARAMETER_BLOCK Spb = ARC_SYSTEM_TABLE();
@@ -271,6 +273,7 @@ static void ArcMain() {
 	ArcIoInit();
 	ArcDiskInit();
 	ArcTimeInit();
+	ArcBugcheckInit();
 
 	// Load environment from HD if possible.
 	ArcEnvLoad();

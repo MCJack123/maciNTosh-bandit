@@ -98,6 +98,18 @@ after_invalidate_tlb:
 	mtspr DBAT2U, r4
 	isync
 
+	// set IBAT3:
+	// 0x0000_0000 + 128k => physical 0x0000_0000 (cached, r+w)
+	// for exceptions
+	li		r3,2
+	lis		r4,0x0000
+	ori		r4,r4,0x0003
+	mtspr	IBAT3L,r3
+	mtspr	IBAT3U,r4
+	mtspr	DBAT3L,r3
+	mtspr	DBAT3U,r4
+	isync
+
 	//stw r28, 0(r30)
 	//dcbst 0, r30
 	
