@@ -227,8 +227,6 @@ void ArcInitRamDisk(ULONG ControllerKey, PVOID Pointer, ULONG Length) {
 	s_RuntimePointers[RUNTIME_RAMDISK].v = (ULONG)&s_RuntimeRamdisk;
 }
 
-extern void ArcBugcheckInit(void);
-
 static void ArcMain() {
 	// Initialise the ARC firmware.
 	PSYSTEM_PARAMETER_BLOCK Spb = ARC_SYSTEM_TABLE();
@@ -273,7 +271,6 @@ static void ArcMain() {
 	ArcIoInit();
 	ArcDiskInit();
 	ArcTimeInit();
-	ArcBugcheckInit();
 
 	// Load environment from HD if possible.
 	ArcEnvLoad();
@@ -737,7 +734,7 @@ void ARC_NORETURN FwMain(PHW_DESCRIPTION Desc) {
 	setup_timers(Desc->DecrementerFrequency);
 	// PXI.
 	printf("Init pxi...\r\n");
-	PxiInit(PciPhysToVirt(Desc->GrandCentralStart + 0x16000), true);
+	PxiInit(PciPhysToVirt(Desc->GrandCentralStart + 0x16000), Desc->MrpFlags & MRP_VIA_IS_CUDA, Desc);
 	// ADB.
 	int adb_bus_init();
 	printf("Init adb...\r\n");

@@ -99,11 +99,3 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     ArcConsoleWrite(string("\r\nSystem halted."));
     while (1) {}
 }
-
-void ArcBugcheckInit(void) {
-    for (void* vec = 0x00000000; vec < 0x00001000; vec += 0x100) {
-        memcpy(vec, (PVOID)BugcheckTrampoline, 0x10);
-        asm("dcbst 0,%0 ; sync ; icbi 0,%0" : : "b"(vec));
-    }
-    __asm__("sync; isync");
-}

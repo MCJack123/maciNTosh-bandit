@@ -4,6 +4,7 @@
 .text
 
 	.extern FwMain
+	.extern BugcheckTrampoline
 	.extern __executable_start
 	.globl _start
 _start:
@@ -98,7 +99,7 @@ after_invalidate_tlb:
 	mtspr DBAT2U, r4
 	isync
 
-	// set IBAT3:
+	// set DBAT3+IBAT3:
 	// 0x0000_0000 + 128k => physical 0x0000_0000 (cached, r+w)
 	// for exceptions
 	li		r3,2
@@ -109,6 +110,33 @@ after_invalidate_tlb:
 	mtspr	DBAT3L,r3
 	mtspr	DBAT3U,r4
 	isync
+
+	// set up bugcheck vectors
+	li r3, 0x0000
+	lis r4, BugcheckTrampoline@h
+	ori r4, r4, BugcheckTrampoline@l
+	xoris r4, r4, 0x8000 // virt -> phys
+bugcheck_init_loop:
+	lwz r5, 0(r4)
+	stw r5, 0(r3)
+	lwz r5, 4(r4)
+	stw r5, 4(r3)
+	lwz r5, 8(r4)
+	stw r5, 8(r3)
+	lwz r5, 12(r4)
+	stw r5, 12(r3)
+	dcbst 0, r3
+	addi r3, r3, 0x0100
+	cmpwi r3, 0x2000
+	blt bugcheck_init_loop
+	sync
+	isync
+
+	// clear DBAT3 (allows null pointer dereferences to fault)
+	//li r0, 0
+	//mtspr DBAT3L, r0
+	//mtspr DBAT3U, r0
+	//isync
 
 	//stw r28, 0(r30)
 	//dcbst 0, r30

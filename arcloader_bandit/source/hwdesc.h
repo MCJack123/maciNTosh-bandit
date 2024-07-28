@@ -19,6 +19,10 @@ typedef struct _HW_DESCRIPTION {
 	ULONG FrameBufferWidth; // Display width
 	ULONG FrameBufferHeight; // Display height
 	ULONG FrameBufferStride; // Number of bytes per line.
+	ULONG ControlFbClockParams[3]; // Parameters for the display clock, set in stage2 by PXI
+	ULONG ControlFbCtrlParam; // Parameter for display control
+	ULONG ControlFbCtrlParamAddr; // Address of display control parameter
+	ULONG Padding;
 	
 	// Boot device details.
 	ULONG BootDevice;

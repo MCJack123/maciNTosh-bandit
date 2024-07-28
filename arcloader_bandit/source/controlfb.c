@@ -223,23 +223,6 @@ static int controlfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 
 /********************  End of controlfb_ops implementation  ******************/
 
-extern int cuda_request(struct adb_request *req,
-		 void (*done)(struct adb_request *), int nbytes, ...);
-extern void cuda_poll(void);
-
-static void set_control_clock(unsigned char *params)
-{
-	struct adb_request req;
-	int i;
-
-	for (i = 0; i < 3; ++i) {
-		cuda_request(&req, NULL, 5, CUDA_PACKET, CUDA_GET_SET_IIC,
-			     0x50, i + 1, params[i]);
-		while (!req.complete)
-			cuda_poll();
-	}
-}
-
 /*
  * Set screen start address according to var offset values
  */
@@ -289,7 +272,7 @@ void control_set_hardware(struct fb_info_control *p, struct fb_par_control *par)
 	/* Turn off display */
 	out_le32(CNTRL_REG(p,ctrl), 0x400 | par->ctrl);
 
-	set_control_clock(r->clock_params);
+	//set_control_clock(r->clock_params);
 
 	RADACAL_WRITE(0x20, r->radacal_ctrl);
 	RADACAL_WRITE(0x21, p->control_use_bank2 ? 0 : 1);
@@ -312,7 +295,7 @@ void control_set_hardware(struct fb_info_control *p, struct fb_par_control *par)
 		out_be32(CNTRL_REG(p,intr_ena), 0);
 
 		/* Turn on display */
-		out_be32(CNTRL_REG(p,ctrl), par->ctrl);
+		//out_be32(CNTRL_REG(p,ctrl), par->ctrl);
 	} else {
 		out_le32(CNTRL_REG(p,start_addr), par->yoffset * par->pitch
 			+ (par->xoffset << cmode));
@@ -320,7 +303,7 @@ void control_set_hardware(struct fb_info_control *p, struct fb_par_control *par)
 		out_le32(CNTRL_REG(p,intr_ena), 0);
 
 		/* Turn on display */
-		out_le32(CNTRL_REG(p,ctrl), par->ctrl);
+		//out_le32(CNTRL_REG(p,ctrl), par->ctrl);
 	}
 }
 

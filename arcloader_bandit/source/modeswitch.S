@@ -78,9 +78,9 @@ exception_wipe_loop:
 	li r19, 4
 	bl BlitScreen
 
-// set up srr1 ready to set MSR_LE, disable MSR_IR|MSR_DR
+// set up srr1 ready to set MSR_LE, disable MSR_IP|MSR_IR|MSR_DR
 	ori r7, r7, 1
-	rlwinm r7, r7, 0, 28, 25
+	rlwinm r7, r7, 0, 28, 24
 	mtsrr1 r7
 	mtsrr0 r29
 

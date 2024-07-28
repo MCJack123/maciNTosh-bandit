@@ -109,7 +109,8 @@ enum {
 	CUDA_RTC_READ = 0x03,
 	CUDA_RTC_WRITE = 0x09,
 	CUDA_POWEROFF_PPC = 0x0a,
-	CUDA_RESET_PPC = 0x11
+	CUDA_RESET_PPC = 0x11,
+	CUDA_GET_SET_IIC = 0x22
 };
 
 enum {
@@ -315,7 +316,7 @@ UCHAR PxiSendSyncRequest(UCHAR Command, PUCHAR Arguments, UCHAR ArgLength, BOOLE
 	return RealResponseLength;
 }
 
-void PxiInit(PVOID MmioBase, bool IsCuda) {
+void PxiInit(PVOID MmioBase, bool IsCuda, PHW_DESCRIPTION Desc) {
 	s_PxiIsCuda = IsCuda;
 	s_PxiRegs = (PPXI_REGISTERS)MmioBase;
 
@@ -324,6 +325,8 @@ void PxiInit(PVOID MmioBase, bool IsCuda) {
 		MmioWrite8(&s_PxiRegs->DirB, (s_PxiRegs->DirB & ~PXI_PORT_REQ_CUDA) | PXI_PORT_ACK_CUDA | PXI_PORT_TIP_CUDA);
 #if 1
 		MmioWrite8(&s_PxiRegs->BufB, s_PxiRegs->BufB | PXI_PORT_RX_CUDA);
+		MmioWrite8(&s_PxiRegs->IER, ~PXI_IE_SET);
+		MmioRead8(&s_PxiRegs->IER);
 		(void)s_PxiRegs->SR; // clear possible interrupt
 #else // following is what openbsd driver does:
 		PxipSetAcrIn();
@@ -345,6 +348,16 @@ void PxiInit(PVOID MmioBase, bool IsCuda) {
 		UCHAR Cmd[2] = { 1, 0 };
 		UCHAR Out[3];
 		PxiSendSyncRequest(CUDA_TYPE_CMD, Cmd, sizeof(Cmd), false, Out, sizeof(Out), false);
+
+		// finish setting up screen
+		if (Desc->MrpFlags & MRP_BANDIT) {
+			//*(PULONG)(Desc->ControlFbCtrlParamAddr + 0x30000000) = 0x400 | Desc->ControlFbCtrlParam; // I think this should work without byte swaps?
+			for (int i = 0; i < 3; i++) {
+				UCHAR Cmd2[4] = {CUDA_GET_SET_IIC, 0x50, i + 1, Desc->ControlFbClockParams[i]};
+				PxiSendSyncRequest(CUDA_TYPE_CMD, Cmd2, sizeof(Cmd2), false, Out, sizeof(Out), false);
+			}
+			*(PULONG)(Desc->ControlFbCtrlParamAddr + 0x30000000) = Desc->ControlFbCtrlParam; // I think this should work without byte swaps?
+		}
 
 		return;
 	}

@@ -220,16 +220,6 @@ int ArcMemInitNtMapping(void) {
 			OfExit();
 			return -5;
 		}
-
-		// Get the CUDA address for video mode setting
-		OFHANDLE CUDA = OfFindDevice("/bandit/gc/via-cuda");
-		if (CUDA == OFNULL) {
-			StdOutWrite("Could not find CUDA device");
-			OfExit();
-			return -5;
-		}
-		if (ARC_FAIL(OfGetPropReg(CUDA, "reg", 0, &Register))) return -5;
-		via = (volatile unsigned char*)(Start + Register.PhysicalAddress.LowPart);
 	}
 	else return -5; // temp
 	
@@ -495,7 +485,7 @@ static inline void out_8(volatile unsigned char *addr, int val)
 			     : "=m" (*addr) : "r" (val));
 }
 
-static int FbSetDepthControl(OFHANDLE Control) {
+static int FbSetDepthControl(OFHANDLE Control, PHW_DESCRIPTION Desc) {
 	ULONG AssignedAddress[2 * 5];
 	ULONG AddrLength = sizeof(AssignedAddress);
 	ARC_STATUS Status = OfGetProperty(Control, "assigned-addresses", AssignedAddress, &AddrLength);
@@ -569,9 +559,11 @@ static int FbSetDepthControl(OFHANDLE Control) {
 		out_8(&info.cmap_regs->lut, i);
 	}
 
-	// debug: dump registers to a place in memory that isn't nuked on reset
-	memcpy(0x700000, RegisterAddress, RegisterSize);
-	memcpy(0x700000 + RegisterSize, &info, sizeof(info));
+	Desc->ControlFbCtrlParam = info.par.ctrl;
+	Desc->ControlFbCtrlParamAddr = &info.control_regs->ctrl.r;
+	Desc->ControlFbClockParams[0] = info.par.regvals.clock_params[0];
+	Desc->ControlFbClockParams[1] = info.par.regvals.clock_params[1];
+	Desc->ControlFbClockParams[2] = info.par.regvals.clock_params[2];
 	
 	return true;
 }
@@ -817,7 +809,7 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 			OfExit();
 			return -11;
 		}
-		if (!FbSetDepthControl(Screen)) {
+		if (!FbSetDepthControl(Screen, Desc)) {
 			StdOutWrite("Could not set up 32bpp framebuffer\r\n");
 			OfExit();
 			return -12;
