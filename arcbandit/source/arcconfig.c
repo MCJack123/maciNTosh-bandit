@@ -223,7 +223,7 @@ static DEVICE_ENTRY Pci2 = {
 static DEVICE_ENTRY Pci = {
     .Component = ARC_MAKE_COMPONENT(AdapterClass, MultiFunctionAdapter, ARC_DEVICE_NONE, 0, 0),
     .Parent = &Root,
-    .Peer = &MacIO,
+    .Peer = &Pci2,
     .Child = &Video
 };
 
@@ -270,7 +270,7 @@ static PDEVICE_ENTRY s_DefaultComponents[] = {
     // First level
     &Cpu,
     &Pci,
-    //&Pci2,
+    &Pci2,
     &MacIO,
 
     // Cpu
@@ -657,7 +657,7 @@ static bool ArcConfigKeyEquals(PDEVICE_ENTRY Lhs, PDEVICE_ENTRY Rhs) {
 
 bool ArcConfigKeyExists(PDEVICE_ENTRY Device) {
     for (ULONG def = 0; def < sizeof(s_DefaultComponents) / sizeof(s_DefaultComponents[0]); def++) {
-        PDEVICE_ENTRY This = &s_DefaultComponents[def];
+        PDEVICE_ENTRY This = s_DefaultComponents[def];
         if (This == Device) continue;
         if (!ArcConfigKeyEquals(Device, This)) continue;
         return true;

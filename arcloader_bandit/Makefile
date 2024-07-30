@@ -7,7 +7,7 @@ PREFIX = $(DEVKITPPC)/bin/powerpc-eabi-
 CFLAGS = -mcpu=604 -m32 -mhard-float -mno-eabi -mno-sdata
 CFLAGS += -ffreestanding -ffunction-sections -fdata-sections
 CFLAGS += -I../baselibc/include
-CFLAGS += -Wall -Wextra -O2
+CFLAGS += -Wall -Wextra -Os
 ASFLAGS =
 LDFLAGS = -mcpu=604 -m32 -n -nostartfiles -nodefaultlibs -Wl,-gc-sections
 

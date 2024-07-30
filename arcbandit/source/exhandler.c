@@ -6,7 +6,7 @@
 
 typedef struct _REGISTER_DUMP {
     ULONG gpr[32];
-    ULONG iv;
+    //ULONG iv;
     ULONG srr0;
     ULONG srr1;
     ULONG cr;
@@ -18,12 +18,13 @@ typedef struct _REGISTER_DUMP {
     ULONG sdr1;
 } REGISTER_DUMP, * PREGISTER_DUMP;
 
-REGISTER_DUMP RegisterSpace = {0};
+REGISTER_DUMP RegisterSpace = { 0 };
 
 #define string(s) s, sizeof(s)
 
 static const char* const hexmap = "0123456789ABCDEF";
 extern void BugcheckTrampoline(void);
+extern void BugcheckHandler(void);
 
 static void PrintHex(ULONG num) {
     char buffer[9];
@@ -40,7 +41,8 @@ static void PrintHex(ULONG num) {
 }
 
 void ArcBugcheck(PREGISTER_DUMP regs) {
-    ArcConsoleWrite(string("\x1bH1,1Exception occurred!\r\nGeneral Purpose Registers:\r\n 00 "));
+
+    ArcConsoleWrite(string("\x9B\x32J\x9b\x31;1HException occurred!\r\nGeneral Purpose Registers:\r\n 00 "));
     PrintHex(regs->gpr[0]);
     PrintHex(regs->gpr[1]);
     PrintHex(regs->gpr[2]);
@@ -49,7 +51,7 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     PrintHex(regs->gpr[5]);
     PrintHex(regs->gpr[6]);
     PrintHex(regs->gpr[7]);
-    ArcConsoleWrite(string("\r\n 10 "));
+    ArcConsoleWrite(string("\r\n 08 "));
     PrintHex(regs->gpr[8]);
     PrintHex(regs->gpr[9]);
     PrintHex(regs->gpr[10]);
@@ -58,7 +60,7 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     PrintHex(regs->gpr[13]);
     PrintHex(regs->gpr[14]);
     PrintHex(regs->gpr[15]);
-    ArcConsoleWrite(string("\r\n 20 "));
+    ArcConsoleWrite(string("\r\n 16 "));
     PrintHex(regs->gpr[16]);
     PrintHex(regs->gpr[17]);
     PrintHex(regs->gpr[18]);
@@ -67,7 +69,7 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     PrintHex(regs->gpr[21]);
     PrintHex(regs->gpr[22]);
     PrintHex(regs->gpr[23]);
-    ArcConsoleWrite(string("\r\n 30 "));
+    ArcConsoleWrite(string("\r\n 24 "));
     PrintHex(regs->gpr[24]);
     PrintHex(regs->gpr[25]);
     PrintHex(regs->gpr[26]);
@@ -76,9 +78,9 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     PrintHex(regs->gpr[29]);
     PrintHex(regs->gpr[30]);
     PrintHex(regs->gpr[31]);
-    ArcConsoleWrite(string("\r\nSpecial Registers:\r\n    %IV: "));
-    PrintHex(regs->iv);
-    ArcConsoleWrite(string("  %SRR0: "));
+    ArcConsoleWrite(string("\r\nSpecial Registers:\r\n    %SRR0: "));
+    //PrintHex(regs->iv);
+    //ArcConsoleWrite(string("  %SRR0: "));
     PrintHex(regs->srr0);
     ArcConsoleWrite(string("  %SRR1: "));
     PrintHex(regs->srr1);
@@ -98,4 +100,11 @@ void ArcBugcheck(PREGISTER_DUMP regs) {
     PrintHex(regs->sdr1);
     ArcConsoleWrite(string("\r\nSystem halted."));
     while (1) {}
+}
+
+void ArcBugcheckInit(void) {
+    for (ULONG vec = 0x90000000u; vec < 0x90001000u; vec += 0x100) {
+        memcpy((PVOID)vec, (PVOID)BugcheckTrampoline, ((ULONG)BugcheckHandler - (ULONG)BugcheckTrampoline));
+    }
+    __asm__("sync; isync");
 }

@@ -123,7 +123,11 @@ static ULONG MempGetKernelRamSize(OFHANDLE Handle) {
 		ULONG ThisBasePage = Memory[i].PhysicalAddress.LowPart / PAGE_SIZE;
 		ULONG PageCount = Memory[i].Size / PAGE_SIZE;
 		// Ensure RAM is mapped consecutively for loading the NT kernel. NT kernel can use RAM mapped elsewhere, however.
-		if (ThisBasePage != BasePage) break;
+		if (ThisBasePage != BasePage) {
+			// Handle empty RAM slots.
+			if (ThisBasePage == 0 && PageCount == 0) continue;
+			break;
+		}
 		BasePage = ThisBasePage + PageCount;
 		PhysSize += Memory[i].Size;
 	}
@@ -611,6 +615,66 @@ static bool FbSetDdaRage4(ULONG BaseAddress) {
 	return true;
 }
 
+static ULONG FbGetMmioBaseAtiForSwap(OFHANDLE Screen) {
+	// Get the parent of screen.
+	OFHANDLE GfxDevice = OfParent(Screen);
+	if (GfxDevice == OFNULL) return 0;
+	
+	// Check for "ATY,Fcode" property
+	StdOutWrite("\r\n");
+	if (!OfPropExists(GfxDevice, "ATY,Fcode") && !OfPropExists(GfxDevice, "ATY,Rom#")) {
+		if (OfPropExists(Screen, "ATY,Fcode") || OfPropExists(Screen, "ATY,Rom#")) {
+			GfxDevice = Screen;
+		} else {
+			// this isn't ATI fcode, this isn't an ATI device
+			return 0;
+		}
+	}
+	
+	// GfxDevice is now the base device.
+	// get the assigned-addresses, of which there should be 3, allocate 4 just in case
+	ULONG AssignedAddress[4 * 5];
+	ULONG AddrLength = sizeof(AssignedAddress);
+	ARC_STATUS Status = OfGetProperty(GfxDevice, "assigned-addresses", AssignedAddress, &AddrLength);
+	if (ARC_FAIL(Status)) {
+		return 0;
+	}
+	
+	ULONG BaseAddress = 0;
+	for (ULONG i = 0; i < AddrLength / 5; i++) {
+		PULONG Aperture = &AssignedAddress[i * 5];
+		if ((Aperture[0] & 0xff) != 0x18) continue; // MMIO area for rage4 and above
+		BaseAddress = Aperture[2];
+		break;
+	}
+	
+	if (BaseAddress < 0x80800000) {
+		return 0;
+	}
+	
+	return BaseAddress;
+}
+
+static bool FbAtiSwapEndian(OFHANDLE Screen) {
+	ULONG BaseAddress = FbGetMmioBaseAtiForSwap(Screen);
+	if (BaseAddress == 0) return false;
+	
+	// On Rage4 or so this is SURFACE_DELAY
+	// That said, only fcode for AGP rage4 has set-depth
+	// Hopefully this is fine there!
+	volatile U32LE* SURFACE_CNTL = (volatile U32LE*)(BaseAddress + 0xB00);
+	SURFACE_CNTL->v = 0;
+	__asm__ volatile ("eieio");
+	
+	// Just in case we end up here on Rage4/etc with set-delay:
+	// These register bits are readonly on Radeon cards...
+	volatile U32LE* CNFG_CNTL = (volatile U32LE*)(BaseAddress + 0xE0);
+	CNFG_CNTL->v = CNFG_CNTL->v & ~3;
+	__asm__ volatile ("eieio");
+	
+	return true;
+}
+
 static bool FbSetDepthAti(OFHANDLE Screen) {
 	// Get the screen width, needed later.
 	ULONG Width;
@@ -793,30 +857,14 @@ static void FbGetDetails(OFHANDLE Screen, PHW_DESCRIPTION HwDesc, bool OverrideS
 	}
 	
 	if (ARC_FAIL(OfGetPropInt(Screen, "address", &FbAddr))) {
-		// This is earliest mach64 fcode ROM
-		// Doesn't specify fb addr for some reason, grab it from assigned-addresses and assumem it's at zero
-		ULONG AssignedAddress[4 * 5];
-		ULONG AddrLength = sizeof(AssignedAddress);
-		ARC_STATUS Status = OfGetProperty(Screen, "assigned-addresses", AssignedAddress, &AddrLength);
-		if (ARC_FAIL(Status)) {
+		// framebuffer address is in frame-buffer-adr
+		// this is how BootX gets it
+		OF_ARGUMENT Arg;
+		if (ARC_FAIL(OfInterpret(0, 1, &Arg, "frame-buffer-adr"))) {
 			OfExit();
 			return;
 		}
-		
-		ULONG BaseAddress = 0;
-		for (ULONG i = 0; i < AddrLength / 5; i++) {
-			PULONG Aperture = &AssignedAddress[i * 5];
-			if (Aperture[4] < 0x01000000) continue; // 16MB vram area
-			BaseAddress = Aperture[2];
-			break;
-		}
-		
-		if (BaseAddress < 0x80800000) {
-			OfExit();
-			return;
-		}
-		
-		FbAddr = BaseAddress;
+		FbAddr = Arg.Int;
 	}
 	
 	if (OverrideStride) Stride *= sizeof(ULONG);
@@ -983,6 +1031,15 @@ int _start(int argc, char** argv, tfpOpenFirmwareCall of) {
 		}
 		// Try to set screen depth to 32 bits by fcode implementation (this will work in some cases)
 		if (FbSetDepthByFcode(Screen)) {
+			// Only radeon cards have set-depth
+			// set-depth also configures the card to be big endian, swap it
+			if (!FbAtiSwapEndian(Screen)) {
+				// Could not swap endianness on this card?
+				FbRestoreDepthByFcode();
+				StdOutWrite("Could not configure the framebuffer to be little-endian on this ATI card\r\n");
+				OfExit();
+				return -12;
+			}
 			FbGetDetails(Screen, Desc, false);
 		} else {
 			if (!FbSetDepthAti(Screen)) {

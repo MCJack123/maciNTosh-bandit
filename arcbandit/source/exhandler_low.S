@@ -8,16 +8,30 @@
 
 .globl BugcheckTrampoline
 BugcheckTrampoline:
+    mtspr SPRG3, r31
+    lis r31, RegisterSpace@h
+    ori r31, r31, RegisterSpace@l
+    clrlwi r31, r31, 2
+    stw r0, 0(r31)
+    mfsrr0 r0
+    stw r0, 128(r31)
+    mfsrr1 r0
+    stw r0, 132(r31)
+
     lis r31, BugcheckHandler@h
     ori r31, r31, BugcheckHandler@l
-    mtctr r31
-    bctr
+    mtsrr0 r31
+    mfmsr		r31
+	ori			r31,r31,MSR_IR|MSR_DR
+	mtsrr1 r31
+    mfspr r31, SPRG3
+    rfi
 
 .globl BugcheckHandler
 BugcheckHandler:
     lis r31, RegisterSpace@h
     ori r31, r31, RegisterSpace@l
-    stw r0, 0(r31)
+    //stw r0, 0(r31)
     stw r1, 4(r31)
     stw r2, 8(r31)
     stw r3, 12(r31)
@@ -50,10 +64,10 @@ BugcheckHandler:
     stw r30, 120(r31)
     stw r31, 124(r31)
     
-    mfspr r4, 26
-    stw r4, 128(r31)
-    mfspr r4, 27
-    stw r4, 132(r31)
+    //mfspr r4, 26
+    //stw r4, 128(r31)
+    //mfspr r4, 27
+    //stw r4, 132(r31)
     //mfspr r4, CR
     //stw r4, 136(r31)
     mfspr r4, 8

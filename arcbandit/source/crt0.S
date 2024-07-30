@@ -99,16 +99,13 @@ after_invalidate_tlb:
 	mtspr DBAT2U, r4
 	isync
 
-	// set DBAT3+IBAT3:
-	// 0x0000_0000 + 128k => physical 0x0000_0000 (cached, r+w)
-	// for exceptions
-	li		r3,2
-	lis		r4,0x0000
-	ori		r4,r4,0x0003
-	mtspr	IBAT3L,r3
-	mtspr	IBAT3U,r4
-	mtspr	DBAT3L,r3
-	mtspr	DBAT3U,r4
+	// set DBAT3:
+	// 0x9000_0000 + 256MB => physical 0x0000_0000 (uncached, r+w)
+	li		r3, 0x2a
+	lis		r4, 0x9000
+	ori		r4, r4, 0x1fff
+	mtspr	DBAT3L, r3
+	mtspr	DBAT3U, r4
 	isync
 
 	// set up bugcheck vectors

@@ -6,7 +6,7 @@
 typedef enum _MIO_TYPE {
 	MIO_UNKNOWN,
 	MIO_GRANDCENTRAL,
-	//MIO_OHARE,
+	MIO_OHARE,
 	MIO_PADDINGTON,
 	MIO_KEYLARGO
 } MIO_TYPE;
@@ -138,7 +138,7 @@ static MIO_TYPE MioDoDetect(PPHYSICAL_ADDRESS BaseAddress) {
 			USHORT DeviceID = PciData->DeviceID;
 			if (
 				DeviceID != 0x0002 && // grandcentral
-				//DeviceID != 0x0007 && // o'hare
+				DeviceID != 0x0007 && // o'hare
 				DeviceID != 0x0010 && // heathrow
 				DeviceID != 0x0017 && // paddington
 				DeviceID != 0x0022 && // keylargo
@@ -152,7 +152,7 @@ static MIO_TYPE MioDoDetect(PPHYSICAL_ADDRESS BaseAddress) {
 			
 			// this is a supported MIO controller.
 			if (DeviceID == 0x0002) RetVal = MIO_GRANDCENTRAL;
-			//else if (DeviceID == 0x0x0007) RetVal = MIO_OHARE;
+			else if (DeviceID == 0x0007) RetVal = MIO_OHARE;
 			else RetVal = (DeviceID < 0x0020) ? MIO_PADDINGTON : MIO_KEYLARGO;
 			if (BaseAddress != NULL) BaseAddress->LowPart = PciData->u.type0.BaseAddresses[0];
 			return RetVal;
